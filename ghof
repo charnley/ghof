@@ -1,10 +1,224 @@
 #!/usr/bin/env python
 
+import numpy as np
+import re
+import os
 
-# Stoichiometry
+au2kcal = 627.509
 
-# G4(0 K)=                  -40.465304
-# G4 Enthalpy=              -40.461488
+E_0_G4 = {
+    "H"  :   -0.50142,
+    "He" :   -2.90491,
+    "Li" :   -7.46636,
+    "Be" :  -14.65765,
+    "B"  :  -24.64665,
+    "C"  :  -37.83417,
+    "N"  :  -54.57367,
+    "O"  :  -75.04550,
+    "F"  :  -99.70498,
+    "Ne" : -128.90099,
+    "Na" : -162.11789,
+    "Mg" : -199.91204,
+    "Al" : -242.22107,
+    "Si" : -289.23704,
+    "P"  : -341.13463,
+    "S"  : -397.98018,
+    "Cl" : -460.01505,
+    "Ar" : -527.40045,
+    "K"  : -599.71219,
+    "Ca" : -677.36261,
+    "Ga" :-1924.35057,
+    "Ge" :-2076.44070,
+    "As" :-2235.31207,
+    "Se" :-2400.97797,
+    "Br" :-2573.58537,
+    "Kr" :-2753.22582,
+    "He+":   -2.00139,
+    "Li+":   -7.26761,
+    "Be+":  -14.31378,
+    "B+" :  -24.34323,
+    "C+" :  -37.42183,
+    "N+" :  -54.04065,
+    "O+" :  -74.54731,
+}
 
+# E_0_G4['H'] = -0.5
+# E_0_G4['C'] = -37.784
+
+hof0k = {
+    "H": 51.636,
+    "Li": 37.696,
+    "Be": 76.486,
+    "B": 136.2,
+    "C": 169.98,
+    "N": 112.53,
+    "O": 58.99,
+    "F": 18.47,
+    "Na": 25.69,
+    "Mg": 34.87,
+    "Al": 78.23,
+    "Si": 106.6,
+    "P": 75.42,
+    "S": 65.66,
+    "Cl": 28.59,
+}
+
+
+dH298H0 = {
+    "H":1.01,
+    "Li":1.10,
+    "Be":0.46,
+    "B":0.29,
+    "C":0.25,
+    "N":1.04,
+    "O":1.04,
+    "F":1.05,
+    "Na":1.54,
+    "Mg":1.19,
+    "Al":1.08,
+    "Si":0.76,
+    "P":1.28,
+    "S":1.05,
+    "Cl":1.10,
+}
+
+
+
+def readlines_reverse(filename):
+    with open(filename) as qfile:
+        qfile.seek(0, os.SEEK_END)
+        position = qfile.tell()
+        line = ''
+        while position >= 0:
+            qfile.seek(position)
+            next_char = qfile.read(1)
+            if next_char == "\n":
+                yield line[::-1]
+                line = ''
+            else:
+                line += next_char
+            position -= 1
+        yield line[::-1]
+
+
+def search_file(filename):
+
+    # G4(0 K)=                  -40.465304
+    # G4 Enthalpy=              -40.461488
+
+    re_sto = r"Stoichiometry[ ]+([A-Za-z1-9]+)"
+    re_sto = re.compile(re_sto)
+
+    re_g4_298 = r"G4 Enthalpy=[ ]+(-?[0-9]+\.[0-9]+)"
+    re_g4_298 = re.compile(re_g4_298)
+
+    re_g4_0 = r"G4\(0 K\)=[ ]+(-?[0-9]+\.[0-9]+)"
+    re_g4_0 = re.compile(re_g4_0)
+
+    fnd_g4_298 = False
+    fnd_g4_0 = False
+    fnd_sto = False
+
+    for line in readlines_reverse(filename):
+
+        if not fnd_sto:
+            matches = re_sto.search(line)
+            if matches:
+                fnd_sto = matches.group(1)
+
+        if not fnd_g4_298:
+            matches = re_g4_298.search(line)
+            if matches:
+                fnd_g4_298 = matches.group(1)
+                fnd_g4_298 = float(fnd_g4_298)
+
+        if not fnd_g4_0:
+            matches = re_g4_0.search(line)
+            if matches:
+                fnd_g4_0 = matches.group(1)
+                fnd_g4_0 = float(fnd_g4_0)
+
+
+        # TODO better way to end loop
+        if fnd_sto and fnd_g4_298 and fnd_g4_0: break
+
+    # print "sto", fnd_sto
+    # print "g4", fnd_g4_298
+    # print "g0", fnd_g4_0
+
+    return fnd_sto, fnd_g4_298, fnd_g4_0
+
+
+def split_formula(stoichimetry):
+
+    atoms = []
+    n_atoms = []
+
+    patt = r"[A-Z][a-z]?[1-9]?"
+
+    matches = re.findall(patt, stoichimetry)
+
+    for match in matches:
+
+        N = re.findall('[0-9]+', match)
+
+        if N:
+            N = N[0]
+            match = match.replace(N, '')
+            atoms.append(match)
+            n_atoms.append(int(N))
+        else:
+            atoms.append(match)
+            n_atoms.append(1)
+
+    return atoms, n_atoms
+
+
+def main():
+
+    import sys
+    import argparse
+
+    description = """ """
+
+    epilog = """ """
+
+    parser = argparse.ArgumentParser(usage='%(prog)s [options] <filename.out>')
+
+    parser.add_argument('gaussian_out', metavar='filename.out', help='Gaussian output file from a G4 calculation', type=str)
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
+    args = parser.parse_args()
+
+    # Parse gaussian file
+    stoichimetry, g4_298, g4_0 = search_file(args.gaussian_out)
+
+    # Get atoms, Stoichiometry
+    atoms, n_atoms = split_formula(stoichimetry)
+
+    # atomization energy
+    # going from molecule to atoms
+    d0 = -g4_0
+    molecule_hof0k = 0.0
+
+    for atom, n in zip(atoms, n_atoms):
+        molecule_hof0k += n*hof0k[atom]
+        d0 += n*E_0_G4[atom]
+
+    molecule_hof0k -= d0*au2kcal
+
+    hof = molecule_hof0k + (g4_298 - g4_0)*au2kcal
+    for atom, n in zip(atoms, n_atoms):
+        hof -= n * dH298H0[atom]
+
+    print hof
+
+    return
+
+if __name__ == "__main__":
+    main()
 
 
