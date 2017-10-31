@@ -6,6 +6,12 @@ import os
 
 au2kcal = 627.509
 
+E_0_G2 = {
+    "H" : -0.5,
+    "C" : -37.784,
+}
+
+
 E_0_G4 = {
     "H"  :   -0.50142,
     "He" :   -2.90491,
@@ -41,9 +47,6 @@ E_0_G4 = {
     "N+" :  -54.04065,
     "O+" :  -74.54731,
 }
-
-# E_0_G4['H'] = -0.5
-# E_0_G4['C'] = -37.784
 
 hof0k = {
     "H": 51.636,
@@ -101,7 +104,7 @@ def readlines_reverse(filename):
         yield line[::-1]
 
 
-def search_file(filename):
+def search_file(filename, g=4):
 
     # G4(0 K)=                  -40.465304
     # G4 Enthalpy=              -40.461488
@@ -109,10 +112,10 @@ def search_file(filename):
     re_sto = r"Stoichiometry[ ]+([A-Za-z1-9]+)"
     re_sto = re.compile(re_sto)
 
-    re_g4_298 = r"G4 Enthalpy=[ ]+(-?[0-9]+\.[0-9]+)"
+    re_g4_298 = r"G{:} Enthalpy=[ ]+(-?[0-9]+\.[0-9]+)".format(g)
     re_g4_298 = re.compile(re_g4_298)
 
-    re_g4_0 = r"G4\(0 K\)=[ ]+(-?[0-9]+\.[0-9]+)"
+    re_g4_0 = r"G{:}\(0 K\)=[ ]+(-?[0-9]+\.[0-9]+)".format(g)
     re_g4_0 = re.compile(re_g4_0)
 
     fnd_g4_298 = False
@@ -145,6 +148,9 @@ def search_file(filename):
     # print "sto", fnd_sto
     # print "g4", fnd_g4_298
     # print "g0", fnd_g4_0
+
+    if not fnd_g4_298 or not fnd_g4_0:
+        quit("Error: Could not find G{:} energies".format(g))
 
     return fnd_sto, fnd_g4_298, fnd_g4_0
 
@@ -186,6 +192,7 @@ def main():
     parser = argparse.ArgumentParser(usage='%(prog)s [options] <filename.out>')
 
     parser.add_argument('gaussian_out', metavar='filename.out', help='Gaussian output file from a G4 calculation', type=str)
+    parser.add_argument('-g', action='store', type=int, help='Using G2 or G4', metavar='int')
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -193,8 +200,14 @@ def main():
 
     args = parser.parse_args()
 
+    # G4 or G2?
+    if args.g == 2:
+        E_0 = E_0_G2
+    else:
+        E_0 = E_0_G4
+
     # Parse gaussian file
-    stoichimetry, g4_298, g4_0 = search_file(args.gaussian_out)
+    stoichimetry, g4_298, g4_0 = search_file(args.gaussian_out, g=args.g)
 
     # Get atoms, Stoichiometry
     atoms, n_atoms = split_formula(stoichimetry)
@@ -206,7 +219,7 @@ def main():
 
     for atom, n in zip(atoms, n_atoms):
         molecule_hof0k += n*hof0k[atom]
-        d0 += n*E_0_G4[atom]
+        d0 += n*E_0[atom]
 
     molecule_hof0k -= d0*au2kcal
 
