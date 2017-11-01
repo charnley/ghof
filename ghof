@@ -109,7 +109,7 @@ def search_file(filename, g=4):
     # G4(0 K)=                  -40.465304
     # G4 Enthalpy=              -40.461488
 
-    re_sto = r"Stoichiometry[ ]+([A-Za-z1-9]+)"
+    re_sto = r"Stoichiometry[ ]+([A-Za-z0-9]+)"
     re_sto = re.compile(re_sto)
 
     re_g4_298 = r"G{:} Enthalpy=[ ]+(-?[0-9]+\.[0-9]+)".format(g)
@@ -160,7 +160,7 @@ def split_formula(stoichimetry):
     atoms = []
     n_atoms = []
 
-    patt = r"[A-Z][a-z]?[1-9]?"
+    patt = r"[A-Z][a-z]?[0-9]*"
 
     matches = re.findall(patt, stoichimetry)
 
@@ -192,7 +192,7 @@ def main():
     parser = argparse.ArgumentParser(usage='%(prog)s [options] <filename.out>')
 
     parser.add_argument('gaussian_out', metavar='filename.out', help='Gaussian output file from a G4 calculation', type=str)
-    parser.add_argument('-g', action='store', type=int, help='Using G2 or G4', metavar='int')
+    parser.add_argument('-g', action='store', type=int, help='Using G2 or G4', metavar='int', default=4)
 
     if len(sys.argv) == 1:
         parser.print_help()
