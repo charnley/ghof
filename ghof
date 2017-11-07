@@ -104,6 +104,51 @@ def readlines_reverse(filename):
         yield line[::-1]
 
 
+def search_file_standard(filename):
+
+    re_sto = r"Stoichiometry[ ]+([A-Za-z0-9]+)"
+    re_sto = re.compile(re_sto)
+
+    re_enthalpy = r"Sum of electronic and thermal Enthalpies=[ ]+(-?[0-9]+\.[0-9]+)"
+    re_enthalpy = re.compile(re_enthalpy)
+
+    re_zero = r"Sum of electronic and zero-point Energies=[ ]+(-?[0-9]+\.[0-9]+)"
+    re_zero = re.compile(re_zero)
+
+    fnd_enthalpy = False
+    fnd_zero = False
+    fnd_sto = False
+
+    for line in readlines_reverse(filename):
+
+        if not fnd_sto:
+            matches = re_sto.search(line)
+            if matches:
+                fnd_sto = matches.group(1)
+
+        if not fnd_enthalpy:
+            matches = re_enthalpy.search(line)
+            if matches:
+                fnd_enthalpy= matches.group(1)
+                fnd_enthalpy = float(fnd_enthalpy)
+
+        if not fnd_zero:
+            matches = re_zero.search(line)
+            if matches:
+                fnd_zero = matches.group(1)
+                fnd_zero = float(fnd_zero)
+
+
+        # TODO better way to end loop
+        if fnd_sto and fnd_enthalpy and fnd_zero: break
+
+    if not fnd_enthalpy or not fnd_zero:
+        quit("Error: Could not find energies")
+
+    return fnd_sto, fnd_enthalpy, fnd_zero
+
+
+
 def search_file(filename, g=4):
 
     # G4(0 K)=                  -40.465304
@@ -154,6 +199,23 @@ def search_file(filename, g=4):
 
     return fnd_sto, fnd_g4_298, fnd_g4_0
 
+def read_atomenergies(filename):
+
+    energies = {}
+
+    f = open(filename, 'r')
+    for line in f:
+        line = line.split(": ")
+        key = line[0]
+        energy = line[1]
+        energy = float(line[1])
+
+        energies[key] = energy
+
+    f.close()
+
+    return energies
+
 
 def split_formula(stoichimetry):
 
@@ -194,20 +256,30 @@ def main():
     parser.add_argument('gaussian_out', metavar='filename.out', help='Gaussian output file from a G4 calculation', type=str)
     parser.add_argument('-g', action='store', type=int, help='Using G2 or G4', metavar='int', default=4)
 
+    parser.add_argument('-d', '--atomenergies', action='store', type=str, help='Use atom energies from csv file', metavar='filename', default=None)
+    parser.add_argument('-n', '--normal', action='store_true', help='Normal frequency calculation. Requires atomenergies.')
+
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
 
     args = parser.parse_args()
 
-    # G4 or G2?
-    if args.g == 2:
-        E_0 = E_0_G2
-    else:
-        E_0 = E_0_G4
+    if not args.normal:
+        # G4 or G2?
+        if args.g == 2:
+            E_0 = E_0_G2
+        else:
+            E_0 = E_0_G4
 
-    # Parse gaussian file
-    stoichimetry, g4_298, g4_0 = search_file(args.gaussian_out, g=args.g)
+        # Parse gaussian file
+        stoichimetry, g4_298, g4_0 = search_file(args.gaussian_out, g=args.g)
+
+    else:
+        E_0 = read_atomenergies(args.atomenergies)
+        stoichimetry, g4_298, g4_0 = search_file_standard(args.gaussian_out)
+
 
     # Get atoms, Stoichiometry
     atoms, n_atoms = split_formula(stoichimetry)
