@@ -145,7 +145,7 @@ def search_file_standard(filename):
     if not fnd_enthalpy:
         quit("Error: Could not find energies")
 
-    return fnd_sto, fnd_enthalpy, fnd_zero
+    return fnd_sto, fnd_enthalpy
 
 
 
