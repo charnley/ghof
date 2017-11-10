@@ -112,8 +112,8 @@ def search_file_standard(filename):
     re_enthalpy = r"Sum of electronic and thermal Enthalpies=[ ]+(-?[0-9]+\.[0-9]+)"
     re_enthalpy = re.compile(re_enthalpy)
 
-    re_zero = r"Sum of electronic and zero-point Energies=[ ]+(-?[0-9]+\.[0-9]+)"
-    re_zero = re.compile(re_zero)
+    # re_zero = r"Sum of electronic and zero-point Energies=[ ]+(-?[0-9]+\.[0-9]+)"
+    # re_zero = re.compile(re_zero)
 
     fnd_enthalpy = False
     fnd_zero = False
@@ -132,17 +132,17 @@ def search_file_standard(filename):
                 fnd_enthalpy= matches.group(1)
                 fnd_enthalpy = float(fnd_enthalpy)
 
-        if not fnd_zero:
-            matches = re_zero.search(line)
-            if matches:
-                fnd_zero = matches.group(1)
-                fnd_zero = float(fnd_zero)
+        # if not fnd_zero:
+        #     matches = re_zero.search(line)
+        #     if matches:
+        #         fnd_zero = matches.group(1)
+        #         fnd_zero = float(fnd_zero)
 
 
         # TODO better way to end loop
-        if fnd_sto and fnd_enthalpy and fnd_zero: break
+        if fnd_sto and fnd_enthalpy: break
 
-    if not fnd_enthalpy or not fnd_zero:
+    if not fnd_enthalpy:
         quit("Error: Could not find energies")
 
     return fnd_sto, fnd_enthalpy, fnd_zero
@@ -160,11 +160,11 @@ def search_file(filename, g=4):
     re_g4_298 = r"G{:} Enthalpy=[ ]+(-?[0-9]+\.[0-9]+)".format(g)
     re_g4_298 = re.compile(re_g4_298)
 
-    re_g4_0 = r"G{:}\(0 K\)=[ ]+(-?[0-9]+\.[0-9]+)".format(g)
-    re_g4_0 = re.compile(re_g4_0)
+    # re_g4_0 = r"G{:}\(0 K\)=[ ]+(-?[0-9]+\.[0-9]+)".format(g)
+    # re_g4_0 = re.compile(re_g4_0)
 
     fnd_g4_298 = False
-    fnd_g4_0 = False
+    # fnd_g4_0 = False
     fnd_sto = False
 
     for line in readlines_reverse(filename):
@@ -180,24 +180,24 @@ def search_file(filename, g=4):
                 fnd_g4_298 = matches.group(1)
                 fnd_g4_298 = float(fnd_g4_298)
 
-        if not fnd_g4_0:
-            matches = re_g4_0.search(line)
-            if matches:
-                fnd_g4_0 = matches.group(1)
-                fnd_g4_0 = float(fnd_g4_0)
+        # if not fnd_g4_0:
+        #     matches = re_g4_0.search(line)
+        #     if matches:
+        #         fnd_g4_0 = matches.group(1)
+        #         fnd_g4_0 = float(fnd_g4_0)
 
 
         # TODO better way to end loop
-        if fnd_sto and fnd_g4_298 and fnd_g4_0: break
+        if fnd_sto and fnd_g4_298: break
 
     # print "sto", fnd_sto
     # print "g4", fnd_g4_298
     # print "g0", fnd_g4_0
 
-    if not fnd_g4_298 or not fnd_g4_0:
+    if not fnd_g4_298:
         quit("Error: Could not find G{:} energies".format(g))
 
-    return fnd_sto, fnd_g4_298, fnd_g4_0
+    return fnd_sto, fnd_g4_298
 
 def read_atomenergies(filename):
 
@@ -257,7 +257,7 @@ def main():
     parser.add_argument('-g', action='store', type=int, help='Using G2 or G4', metavar='int', default=4)
 
     parser.add_argument('-d', '--atomenergies', action='store', type=str, help='Use atom energies from csv file', metavar='filename', default=None)
-    parser.add_argument('-n', '--normal', action='store_true', help='Normal frequency calculation. Requires atomenergies.')
+    parser.add_argument('-n', '--normal', action='store_true', help='Normal frequency calculation. Requires atomenergies database.')
 
 
     if len(sys.argv) == 1:
@@ -274,29 +274,20 @@ def main():
             E_0 = E_0_G4
 
         # Parse gaussian file
-        stoichimetry, g4_298, g4_0 = search_file(args.gaussian_out, g=args.g)
+        stoichimetry, h_298 = search_file(args.gaussian_out, g=args.g)
 
     else:
         E_0 = read_atomenergies(args.atomenergies)
-        stoichimetry, g4_298, g4_0 = search_file_standard(args.gaussian_out)
+        stoichimetry, h_298 = search_file_standard(args.gaussian_out)
 
 
     # Get atoms, Stoichiometry
     atoms, n_atoms = split_formula(stoichimetry)
 
-    # atomization energy
-    # going from molecule to atoms
-    d0 = -g4_0
-    molecule_hof0k = 0.0
-
+    hof = h_298*au2kcal
     for atom, n in zip(atoms, n_atoms):
-        molecule_hof0k += n*hof0k[atom]
-        d0 += n*E_0[atom]
-
-    molecule_hof0k -= d0*au2kcal
-
-    hof = molecule_hof0k + (g4_298 - g4_0)*au2kcal
-    for atom, n in zip(atoms, n_atoms):
+        hof -= n * E_0[atom]*au2kcal
+        hof += n * hof0k[atom]
         hof -= n * dH298H0[atom]
 
     print hof
