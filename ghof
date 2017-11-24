@@ -258,13 +258,26 @@ def main():
 
     parser.add_argument('-d', '--atomenergies', action='store', type=str, help='Use atom energies from csv file', metavar='filename', default=None)
     parser.add_argument('-n', '--normal', action='store_true', help='Normal frequency calculation. Requires atomenergies database.')
+    parser.add_argument('-e', '--enthaly', action='store', type=float, help='Enthalpy', metavar='H', default=None)
+    parser.add_argument('-s', '--stoichimetry', action='store', type=str, help='Molecule structure', metavar='str', default=None)
 
+    parser.add_argument('-o', '--print_stoichimetry', action='store_true', help='Find and print the stoichimetry only')
 
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
 
     args = parser.parse_args()
+
+    # Parse gaussian file
+    if not args.normal:
+        stoichimetry, h_298 = search_file(args.gaussian_out, g=args.g)
+    else:
+        stoichimetry, h_298 = search_file_standard(args.gaussian_out)
+
+    if args.print_stoichimetry:
+        print(stoichimetry)
+        quit()
 
     if not args.normal:
         # G4 or G2?
@@ -273,12 +286,8 @@ def main():
         else:
             E_0 = E_0_G4
 
-        # Parse gaussian file
-        stoichimetry, h_298 = search_file(args.gaussian_out, g=args.g)
-
     else:
         E_0 = read_atomenergies(args.atomenergies)
-        stoichimetry, h_298 = search_file_standard(args.gaussian_out)
 
 
     # Get atoms, Stoichiometry
